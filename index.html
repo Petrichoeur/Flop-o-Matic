@@ -332,14 +332,13 @@
 <script>
 /* ======== Données GPU (approximatives, modifiables) ======== */
 const GPUs = {
-  l40s: { name:"L40S", cores:14272, vramGB:48, clkMinGHz:1.90, clkMaxGHz:2.60 },
-  h100: { name:"H100", cores:16896, vramGB:80, clkMinGHz:1.30, clkMaxGHz:1.90 },
-  h200: { name:"H200", cores:16896, vramGB:141, clkMinGHz:1.30, clkMaxGHz:1.90 },
+  l40s: { name:"L40S", cores:14272, vramGB:48, clkMinGHz:1.50, clkMaxGHz:1.9 },
+  h200: { name:"H200", cores:16896, vramGB:141, clkMinGHz:1.40, clkMaxGHz:1.80 },
 };
 
 const PREC = {
   fp32: { bytesPerParam: 4, throughputMul: 1 },
-  bf16: { bytesPerParam: 2, throughputMul: 4 },
+  fp16: { bytesPerParam: 2, throughputMul: 4 },
   fp8: { bytesPerParam: 1, throughputMul: 8 },
 };
 
@@ -350,9 +349,9 @@ const clamp = (v,min,max)=> Math.max(min, Math.min(max, v));
 const lsKey = "gpu_calc_state_v1";
 
 let state = {
-  gpuKey: "h100",
+  gpuKey: "h200",
   override:false,
-  cores: GPUs.h100.cores, vramGB: GPUs.h100.vramGB, clkMinGHz: GPUs.h100.clkMinGHz, clkMaxGHz: GPUs.h100.clkMaxGHz,
+  cores: GPUs.h200.cores, vramGB: GPUs.h200.vramGB, clkMinGHz: GPUs.h200.clkMinGHz, clkMaxGHz: GPUs.h200.clkMaxGHz,
   mName:"", mParamsB: 7, mEff:1, mVramGB:null, tokMin:64, tokMax:2048,
   precision:"bf16", nSamples:50000, batchSize:64, epochs:1, actPct:30, kvPct:25, commPct:10,
 };
@@ -464,19 +463,12 @@ function computeAll(){
     modelGB = estimateModelVRAMGB(paramsB);
   }
 
-  // FLOPs/jeton (forward) ~ 2*P (heuristique)
-  const flopsPerTokenFwd = 2 * P;
-
-  // Débits effectifs (min/max horloge)
-  const thrMin = effectiveThroughput(g.clkMinGHz);
-  const thrMax = effectiveThroughput(g.clkMaxGHz);
-  const thrMid = effectiveThroughput((g.clkMinGHz + g.clkMaxGHz)/2);
 
   // Inference times
-  const infFlopsMin = flopsPerTokenFwd * tmin; // tokens min
-  const infFlopsMax = flopsPerTokenFwd * tmax; // tokens max
-  const infTimeMin = infFlopsMin / thrMax; // plus rapide avec horloge max
-  const infTimeMax = infFlopsMax / thrMin; // plus lent avec horloge min
+  #placeholder 
+  
+  const infTimeMin = (modelGB / (flopsPerTokenFwd * state.mEff )) * tmin ; // plus rapide avec horloge max
+  const infTimeMax = (modelGB / (flopsPerTokenFwd * state.mEff )) * tmax ; // plus lent avec horloge min
 
   // Batch compute (séq. moyenne)
   const seqAvg = (tmin + tmax)/2;
@@ -609,9 +601,9 @@ function bindInputs(){
   $("#resetBtn").addEventListener("click", ()=>{
     localStorage.removeItem(lsKey);
     state = {
-      gpuKey: "h100",
+      gpuKey: "h200",
       override:false,
-      cores: GPUs.h100.cores, vramGB: GPUs.h100.vramGB, clkMinGHz: GPUs.h100.clkMinGHz, clkMaxGHz: GPUs.h100.clkMaxGHz,
+      cores: GPUs.h200.cores, vramGB: GPUs.h200.vramGB, clkMinGHz: GPUs.h200.clkMinGHz, clkMaxGHz: GPUs.h200.clkMaxGHz,
       mName:"", mParamsB: 7, mEff:1, mVramGB:null, tokMin:64, tokMax:2048,
       precision:"bf16", nSamples:50000, batchSize:64, epochs:1, actPct:30, kvPct:25, commPct:10,
     };
