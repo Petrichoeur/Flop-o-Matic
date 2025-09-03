@@ -464,7 +464,7 @@ function computeAll(){
   }
 
   // FLOPs/jeton (forward) ~ 2*P (heuristique)
-  const flopsPerTokenFwd = 2 * P;
+  const flopsPerTokenFwd = 6 * P;
 
   // Débits effectifs (min/max horloge)
   const thrMin = effectiveThroughput(g.clkMinGHz);
