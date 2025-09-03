@@ -501,8 +501,8 @@ function computeAll(){
   // #GPUs en fonction de la VRAM
   const fgpusTrain =  vramTrainGB / g.vramGB;
   const fgpusInf =  vramInfGB / g.vramGB ;
-  const gpusTrain =  fgpusTrain.toPrecision(2)
-  const gpusInf =  fgpusInf.toPrecision(2)
+  const gpusTrain =  fgpusTrain.toPrecision(3)
+  const gpusInf =  fgpusInf.toPrecision(3)
 
   // Communication (si multi-GPU) — fraction du temps de compute
   const commBatch = (gpusTrain>1) ? (timeComputeBatch * commPct * (gpusTrain-1)/gpusTrain) : 0;
