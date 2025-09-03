@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Calculette GPU — Inference & Training</title>
+<style>
+  :root{
+    --bg:#0b1220; --panel:#121a2b; --muted:#8fa0c2; --text:#e6eeff;
+    --accent:#6dd3fb; --accent2:#a6ff92; --danger:#ff6b6b; --warn:#ffd166;
+    --ok:#4ade80; --shadow:0 10px 30px rgba(0,0,0,.35);
+    --radius:18px;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji","Segoe UI Emoji";
+    color:var(--text); background: radial-gradient(1200px 600px at 10% -10%, #14213d88, transparent), var(--bg);
+  }
+  header{
+    position:sticky; top:0; z-index:5; backdrop-filter: blur(6px);
+    background: linear-gradient(180deg, rgba(11,18,32,.9), rgba(11,18,32,.6) 70%, transparent);
+    padding:18px 16px 10px;
+    border-bottom: 1px solid #1e2a44;
+  }
+  header .title{display:flex; align-items:center; gap:12px}
+  header .badge{
+    padding:4px 10px; border-radius:999px; background:#14213d; color:var(--accent); border:1px solid #1f2d4b; font-weight:600; font-size:12px
+  }
+  header h1{margin:0; font-size:20px; letter-spacing:.2px}
+  header p{margin:6px 0 0; color:var(--muted); font-size:13px}
+
+  .container{max-width:1200px; margin:18px auto; padding:0 14px; display:grid; gap:14px; grid-template-columns: 360px 1fr}
+  @media (max-width: 980px){ .container{grid-template-columns:1fr} }
+
+  .card{
+    background: linear-gradient(180deg, #121a2b, #0f1726);
+    border:1px solid #1e2a44; border-radius: var(--radius); box-shadow: var(--shadow); padding:16px;
+  }
+  .card h3{margin:0 0 10px; font-size:16px}
+  .sub{color:var(--muted); font-size:12px; margin-top:-2px}
+  .grid{display:grid; gap:10px}
+  .g2{grid-template-columns: 1fr 1fr}
+  .g3{grid-template-columns: repeat(3, 1fr)}
+  .row{display:flex; gap:10px}
+  label{display:block; font-size:12px; color:var(--muted); margin:2px 2px 6px}
+  input, select{
+    width:100%; background:#0b1324; border:1px solid #233253; color:var(--text);
+    padding:10px 12px; border-radius:12px; outline:none; transition:.15s border-color;
+  }
+  input:focus, select:focus{border-color:#3f5ea4}
+  .inline{display:flex; align-items:center; gap:8px}
+  .hint{color:var(--muted); font-size:11px}
+  .pill{background:#0e1830; border:1px solid #213a6a; padding:6px 10px; border-radius:999px; font-size:12px; color:var(--accent)}
+  .switch{position:relative; width:44px; height:24px}
+  .switch input{display:none}
+  .switch .trk{position:absolute; inset:0; background:#10203f; border:1px solid #233253; border-radius:999px}
+  .switch .dot{position:absolute; top:2px; left:2px; width:20px; height:20px; border-radius:50%;
+    background:#2b3f73; transition:.15s; }
+  .switch input:checked + .trk{background:#15375d; border-color:#2f67b5}
+  .switch input:checked + .trk .dot{left:22px; background:#6dd3fb}
+  .muted{opacity:.7}
+
+  .kpi{display:grid; grid-template-columns: repeat(3,1fr); gap:10px; margin-top:6px}
+  .kpi .item{background:#0c1528; border:1px solid #203154; border-radius:14px; padding:12px}
+  .kpi .label{color:var(--muted); font-size:12px}
+  .kpi .value{font-size:18px; font-weight:700; margin-top:4px}
+
+  table{width:100%; border-collapse:separate; border-spacing:0; overflow:hidden; border-radius:14px; border:1px solid #1e2a44}
+  thead th{background:#0e1830; color:#cfe2ff; font-weight:600; text-align:left; padding:10px 12px; font-size:12px; border-bottom:1px solid #1e2a44}
+  tbody td{padding:10px 12px; border-top:1px solid #18243f; font-size:13px}
+  tbody tr:nth-child(odd) td{background:#0b1324}
+  tbody tr:nth-child(even) td{background:#0d1627}
+  .ok{color:var(--ok)} .warn{color:var(--warn)} .danger{color:var(--danger)}
+
+  .footer-actions{display:flex; gap:10px; justify-content:flex-end}
+  button{
+    background:linear-gradient(180deg, #1b2a4d, #162341); color:#e9f2ff; border:1px solid #2a4377;
+    padding:10px 14px; border-radius:12px; cursor:pointer; font-weight:600;
+  }
+  button.secondary{background:#0e1830; border-color:#233a66; color:#cfe2ff}
+  .tiny{font-size:12px; color:var(--muted); margin-top:8px}
+  .tooltip{border-bottom:1px dotted #6dd3fb; cursor:help}
+</style>
+</head>
+<body>
+<header>
+  <div class="title">
+    <span class="badge">Calculette GPU</span>
+    <h1>Estimation Inference & Entraînement</h1>
+  </div>
+  <p class="sub">Choisis un GPU, renseigne ton modèle, et obtiens des estimations réactives (compute, VRAM, temps & #GPU). Les formules sont ajustables dans la section “Avancé”.</p>
+</header>
+
+<div class="container">
+  <!-- Colonne gauche: GPU -->
+  <section class="card">
+    <h3>1) Carte GPU <span class="pill" id="gpuVramPill">VRAM —</span></h3>
+    <div class="grid g3" id="gpuChoices">
+      <!-- radio GPUs rendu par JS -->
+    </div>
+
+    <div class="kpi">
+      <div class="item">
+        <div class="label">CUDA Cores</div>
+        <div class="value" id="kpiCores">—</div>
+      </div>
+      <div class="item">
+        <div class="label">Horloge (GHz) min → max</div>
+        <div class="value" id="kpiClock">—</div>
+      </div>
+      <div class="item">
+        <div class="label">Perf. théorique (TFLOPS) min → max</div>
+        <div class="value" id="kpiTflops">—</div>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:12px; align-items:center; justify-content:space-between">
+      <div class="inline">
+        <label class="inline" style="gap:8px">
+          <span class="switch">
+            <input type="checkbox" id="overrideSpecs">
+            <span class="trk"><span class="dot"></span></span>
+          </span>
+          <span>Modifier les specs GPU (avancé)</span>
+        </label>
+      </div>
+      <span class="hint">⚠️ Valeurs constructeur approximatives — ajustables.</span>
+    </div>
+
+    <div id="specsEditor" style="display:none; margin-top:10px">
+      <div class="grid g2">
+        <div>
+          <label>CUDA Cores</label>
+          <input type="number" id="iCores" min="1" step="1" />
+        </div>
+        <div>
+          <label>VRAM (GB)</label>
+          <input type="number" id="iVram" min="1" step="1" />
+        </div>
+      </div>
+      <div class="grid g2" style="margin-top:8px">
+        <div>
+          <label>Horloge min (GHz)</label>
+          <input type="number" id="iClkMin" min="0.5" max="4" step="0.01" />
+        </div>
+        <div>
+          <label>Horloge max (GHz)</label>
+          <input type="number" id="iClkMax" min="0.5" max="4" step="0.01" />
+        </div>
+      </div>
+      <p class="tiny">TFLOPS = CUDA Cores × 2 FLOPs/cycle × Horloge (GHz) ÷ 1000. Multiplicateurs de précision appliqués plus bas.</p>
+    </div>
+  </section>
+
+  <!-- Colonne droite: Modèle & calculs -->
+  <section class="card">
+    <h3>2) Modèle & Données</h3>
+    <div class="grid g3">
+      <div>
+        <label>Nom du modèle</label>
+        <input id="mName" placeholder="ex: Llama-3 70B" />
+      </div>
+      <div>
+        <label>Nb de paramètres (Md)</label>
+        <input id="mParamsB" type="number" min="0" step="0.1" value="7" />
+      </div>
+      <div>
+        <label>Score d’efficacité <span class="tooltip" title=">1 = plus rapide (mieux optimisé), 1 = base, <1 = moins efficace">ⓘ</span></label>
+        <input id="mEff" type="number" min="0.2" max="2" step="0.05" value="1"/>
+      </div>
+    </div>
+    <div class="grid g3" style="margin-top:8px">
+      <div>
+        <label>VRAM modèle (GB) <span class="tooltip" title="Laisse vide pour estimer depuis #param x taille précision">ⓘ</span></label>
+        <input id="mVramGB" type="number" min="0" step="0.1" placeholder="auto"/>
+      </div>
+      <div>
+        <label>Tokens min</label>
+        <input id="tokMin" type="number" min="1" step="1" value="64"/>
+      </div>
+      <div>
+        <label>Tokens max</label>
+        <input id="tokMax" type="number" min="1" step="1" value="2048"/>
+      </div>
+    </div>
+
+    <div class="grid g3" style="margin-top:8px">
+      <div>
+        <label>Précision</label>
+        <select id="precision">
+          <option value="fp32">FP32</option>
+          <option value="bf16" selected>BF16/FP16</option>
+          <option value="fp8">FP8 / INT8</option>
+        </select>
+      </div>
+      <div>
+        <label>Samples pour entraînement</label>
+        <input id="nSamples" type="number" min="1" step="1" value="50000"/>
+      </div>
+      <div>
+        <label>Taille de batch</label>
+        <input id="batchSize" type="number" min="1" step="1" value="64"/>
+      </div>
+    </div>
+
+    <details style="margin-top:10px">
+      <summary style="cursor:pointer">⚙️ Avancé (epochs, activations, KV-cache, communication)</summary>
+      <div class="grid g3" style="margin-top:10px">
+        <div>
+          <label>Epochs</label>
+          <input id="epochs" type="number" min="1" step="1" value="1"/>
+        </div>
+        <div>
+          <label>Activation overhead (%)</label>
+          <input id="actPct" type="number" min="0" step="1" value="30"/>
+        </div>
+        <div>
+          <label>KV-cache facteur (%)</label>
+          <input id="kvPct" type="number" min="0" step="1" value="25"/>
+        </div>
+      </div>
+      <div class="grid g2" style="margin-top:8px">
+        <div>
+          <label>Overhead communication (%)</label>
+          <input id="commPct" type="number" min="0" step="1" value="10"/>
+        </div>
+        <div>
+          <label>Objectif (info) <span class="tooltip" title="Les calculs sont bornés par la VRAM; ils n’essaient pas d’optimiser un SLA de latence.">ⓘ</span></label>
+          <input disabled value="VRAM-bound (par défaut)" />
+        </div>
+      </div>
+      <p class="tiny">
+        Hypothèses (editables via pourcentages) : FLOPs/jeton (forward) ≈ <b>2 × #params</b>. Entraînement ≈ 3× forward (forward+backward+optim).  
+        Mémoire entraînement ≈ VRAM modèle + gradients + états optimiseur (Adam) + activations + KV-cache.  
+        Mult. de précision : FP32=×1, BF16/FP16=×4, FP8/INT8=×8 (approximations).
+      </p>
+    </details>
+
+    <hr style="border:none; border-top:1px solid #213054; margin:14px 0" />
+
+    <div class="grid g3">
+      <div class="card" style="padding:12px">
+        <div class="label">Temps d'inférence min (s)</div>
+        <div class="value" id="infMin">—</div>
+        <div class="hint">Calculé avec horloge max & tokens min</div>
+      </div>
+      <div class="card" style="padding:12px">
+        <div class="label">Temps d'inférence max (s)</div>
+        <div class="value" id="infMax">—</div>
+        <div class="hint">Horloge min & tokens max</div>
+      </div>
+      <div class="card" style="padding:12px">
+        <div class="label">VRAM inférence (GB)</div>
+        <div class="value" id="vramInf">—</div>
+        <div class="hint">Modèle + KV-cache (heuristique)</div>
+      </div>
+    </div>
+
+    <div class="grid g3" style="margin-top:10px">
+      <div class="card" style="padding:12px">
+        <div class="label">Forward/batch (s)</div>
+        <div class="value" id="fwdBatch">—</div>
+        <div class="hint">Séq. moyenne & batch actuel</div>
+      </div>
+      <div class="card" style="padding:12px">
+        <div class="label">Backward/batch (s)</div>
+        <div class="value" id="bwdBatch">—</div>
+        <div class="hint">≈ 2× forward</div>
+      </div>
+      <div class="card" style="padding:12px">
+        <div class="label">Comm/batch (s)</div>
+        <div class="value" id="commBatch">—</div>
+        <div class="hint">Si multi-GPU</div>
+      </div>
+    </div>
+
+    <div class="grid g3" style="margin-top:10px">
+      <div class="card" style="padding:12px">
+        <div class="label">Temps / batch (s)</div>
+        <div class="value" id="timeBatch">—</div>
+        <div class="hint">Compute + communication</div>
+      </div>
+      <div class="card" style="padding:12px">
+        <div class="label">Temps d'entraînement (h)</div>
+        <div class="value" id="trainHours">—</div>
+        <div class="hint">#steps × temps/batch</div>
+      </div>
+      <div class="card" style="padding:12px">
+        <div class="label">VRAM entraînement (GB)</div>
+        <div class="value" id="vramTrain">—</div>
+        <div class="hint">Poids + grad + optim + act + KV</div>
+      </div>
+    </div>
+
+    <h3 style="margin-top:16px">3) Récapitulatif</h3>
+    <div class="card" style="padding:0">
+      <table>
+        <thead>
+          <tr>
+            <th>Entraînement (heures)</th>
+            <th>Inférence min (s)</th>
+            <th>Inférence max (s)</th>
+            <th>VRAM entraînement (GB)</th>
+            <th>VRAM modèle (GB)</th>
+            <th>#GPU entraînement</th>
+            <th>#GPU inférence</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td id="tTrainH">—</td>
+            <td id="tInfMin">—</td>
+            <td id="tInfMax">—</td>
+            <td id="tVramTrain">—</td>
+            <td id="tVramModel">—</td>
+            <td id="tGpusTrain">—</td>
+            <td id="tGpusInf">—</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="footer-actions" style="margin-top:12px">
+      <button class="secondary" id="resetBtn">Réinitialiser</button>
+      <button id="copyBtn">Copier l’état</button>
+    </div>
+    <p class="tiny">⚠️ Outil d’estimation. Pour du sizing contractuel, calibre les multiplicateurs / pourcentages selon ton stack (tensor cores, pipeline/DP/TP, activation checkpointing, NVLink, etc.).</p>
+  </section>
+</div>
+
+<script>
+/* ======== Données GPU (approximatives, modifiables) ======== */
+const GPUs = {
+  l40s: { name:"L40S", cores:14272, vramGB:48, clkMinGHz:1.90, clkMaxGHz:2.60 },
+  h100: { name:"H100", cores:16896, vramGB:80, clkMinGHz:1.30, clkMaxGHz:1.90 },
+  h200: { name:"H200", cores:16896, vramGB:141, clkMinGHz:1.30, clkMaxGHz:1.90 },
+};
+
+const PREC = {
+  fp32: { bytesPerParam: 4, throughputMul: 1 },
+  bf16: { bytesPerParam: 2, throughputMul: 4 },
+  fp8: { bytesPerParam: 1, throughputMul: 8 },
+};
+
+/* ======== Helpers UI ======== */
+const $ = sel => document.querySelector(sel);
+const fmt = (x, d=2) => (!isFinite(x) || isNaN(x)) ? "—" : Number(x).toLocaleString("fr-FR",{maximumFractionDigits:d});
+const clamp = (v,min,max)=> Math.max(min, Math.min(max, v));
+const lsKey = "gpu_calc_state_v1";
+
+let state = {
+  gpuKey: "h100",
+  override:false,
+  cores: GPUs.h100.cores, vramGB: GPUs.h100.vramGB, clkMinGHz: GPUs.h100.clkMinGHz, clkMaxGHz: GPUs.h100.clkMaxGHz,
+  mName:"", mParamsB: 7, mEff:1, mVramGB:null, tokMin:64, tokMax:2048,
+  precision:"bf16", nSamples:50000, batchSize:64, epochs:1, actPct:30, kvPct:25, commPct:10,
+};
+
+function loadState(){
+  try{
+    const s = JSON.parse(localStorage.getItem(lsKey)||"null");
+    if(s) state = {...state, ...s};
+  }catch(e){}
+}
+function saveState(){
+  localStorage.setItem(lsKey, JSON.stringify(state));
+}
+
+/* ======== Rendu choix GPU ======== */
+function renderGPUChoices(){
+  const wrap = $("#gpuChoices");
+  wrap.innerHTML = "";
+  Object.entries(GPUs).forEach(([key, g])=>{
+    const sel = state.gpuKey===key ? 'checked' : '';
+    const html = `
+      <label class="card" style="padding:12px; cursor:pointer; display:block">
+        <div class="inline" style="justify-content:space-between">
+          <div class="inline" style="gap:10px">
+            <input type="radio" name="gpu" value="${key}" ${sel} />
+            <strong>${g.name}</strong>
+          </div>
+          <span class="pill">${g.vramGB} GB</span>
+        </div>
+        <div class="hint" style="margin-top:6px">Cores ${g.cores.toLocaleString('fr-FR')} · Horloge ${g.clkMinGHz}–${g.clkMaxGHz} GHz</div>
+      </label>`;
+    const div = document.createElement("div");
+    div.innerHTML = html;
+    wrap.appendChild(div.firstElementChild);
+  });
+  wrap.querySelectorAll('input[name="gpu"]').forEach(r=>{
+    r.addEventListener('change', e=>{
+      state.gpuKey = e.target.value;
+      const g = GPUs[state.gpuKey];
+      if(!state.override){
+        state.cores = g.cores; state.vramGB = g.vramGB;
+        state.clkMinGHz = g.clkMinGHz; state.clkMaxGHz = g.clkMaxGHz;
+      }
+      saveState(); refresh();
+    });
+  });
+}
+
+/* ======== Rendu kpis GPU ======== */
+function updateGPUKpis(){
+  const g = currentGPU();
+  $("#kpiCores").textContent = g.cores.toLocaleString("fr-FR");
+  $("#kpiClock").textContent = `${g.clkMinGHz} → ${g.clkMaxGHz}`;
+  const tflMin = flopsTFLOPS(g.cores, g.clkMinGHz);
+  const tflMax = flopsTFLOPS(g.cores, g.clkMaxGHz);
+  $("#kpiTflops").textContent = `${fmt(tflMin,1)} → ${fmt(tflMax,1)}`;
+  $("#gpuVramPill").textContent = `VRAM — ${g.vramGB} GB`;
+}
+
+/* ======== Logique calcul ======== */
+function currentGPU(){
+  return {
+    name: GPUs[state.gpuKey].name,
+    cores: state.override ? Number(state.cores||0) : GPUs[state.gpuKey].cores,
+    vramGB: state.override ? Number(state.vramGB||0) : GPUs[state.gpuKey].vramGB,
+    clkMinGHz: state.override ? Number(state.clkMinGHz||0) : GPUs[state.gpuKey].clkMinGHz,
+    clkMaxGHz: state.override ? Number(state.clkMaxGHz||0) : GPUs[state.gpuKey].clkMaxGHz,
+  }
+}
+function flopsPerSec(cores, clkGHz){
+  // FLOPs/s ≈ CUDA cores × 2 × GHz × 1e9 (approx FP32 sur cores CUDA)
+  return cores * 2 * clkGHz * 1e9;
+}
+function flopsTFLOPS(cores, clkGHz){
+  return flopsPerSec(cores, clkGHz)/1e12;
+}
+
+function effectiveThroughput(clockGHz){
+  const g = currentGPU();
+  const p = PREC[state.precision];
+  const base = flopsPerSec(g.cores, clockGHz);
+  // Multiplie par score d’efficacité et multiplicateur de précision (approximation)
+  return base * Number(state.mEff||1) * p.throughputMul;
+}
+
+function estimateModelVRAMGB(paramsB){
+  // estimation simple: poids = #params × bytes_per_param
+  const p = PREC[state.precision];
+  const bytes = paramsB*1e9 * p.bytesPerParam;
+  return bytes / 1e9; // en GB (approx)
+}
+
+function computeAll(){
+  const g = currentGPU();
+  const p = PREC[state.precision];
+
+  const paramsB = Math.max(0, Number(state.mParamsB||0));
+  const P = paramsB * 1e9; // #params absolu
+  const eff = Math.max(0.1, Number(state.mEff||1));
+  const tmin = Math.max(1, Number(state.tokMin||1));
+  const tmax = Math.max(tmin, Number(state.tokMax||tmin));
+  const bs = Math.max(1, Number(state.batchSize||1));
+  const samples = Math.max(1, Number(state.nSamples||1));
+  const steps = Math.ceil(samples / bs) * Math.max(1, Number(state.epochs||1));
+
+  // VRAM modèle (saisi ou estimé)
+  let modelGB = Number(state.mVramGB);
+  if(!isFinite(modelGB) || modelGB<=0){
+    modelGB = estimateModelVRAMGB(paramsB);
+  }
+
+  // FLOPs/jeton (forward) ~ 2*P (heuristique)
+  const flopsPerTokenFwd = 2 * P;
+
+  // Débits effectifs (min/max horloge)
+  const thrMin = effectiveThroughput(g.clkMinGHz);
+  const thrMax = effectiveThroughput(g.clkMaxGHz);
+  const thrMid = effectiveThroughput((g.clkMinGHz + g.clkMaxGHz)/2);
+
+  // Inference times
+  const infFlopsMin = flopsPerTokenFwd * tmin; // tokens min
+  const infFlopsMax = flopsPerTokenFwd * tmax; // tokens max
+  const infTimeMin = infFlopsMin / thrMax; // plus rapide avec horloge max
+  const infTimeMax = infFlopsMax / thrMin; // plus lent avec horloge min
+
+  // Batch compute (séq. moyenne)
+  const seqAvg = (tmin + tmax)/2;
+  const fwdBatchFlops = flopsPerTokenFwd * seqAvg * bs;
+  const bwdBatchFlops = fwdBatchFlops * 2; // ~2× forward
+  const timeFwd = fwdBatchFlops / thrMid;
+  const timeBwd = bwdBatchFlops / thrMid;
+  let timeComputeBatch = timeFwd + timeBwd;
+
+  // Mémoire — entraînement
+  const actPct = Math.max(0, Number(state.actPct||0))/100;
+  const kvPct = Math.max(0, Number(state.kvPct||0))/100;
+  const commPct= Math.max(0, Number(state.commPct||0))/100;
+
+  // Gradients (même précision que poids) + Optim (Adam m+v en FP32 ~ 8 B/param)
+  const gradGB = (P * p.bytesPerParam) / 1e9;
+  const optimGB = (P * 8) / 1e9;
+  const actGB = modelGB * actPct;
+  const kvGB = modelGB * kvPct * (tmax/2048); // KV proportionnel à longueur (heuristique)
+  const vramTrainGB = modelGB + gradGB + optimGB + actGB + kvGB;
+  const vramInfGB = modelGB + kvGB;
+
+  // #GPUs en fonction de la VRAM
+  const gpusTrain = Math.max(1, Math.ceil(vramTrainGB / g.vramGB));
+  const gpusInf = Math.max(1, Math.ceil(vramInfGB / g.vramGB));
+
+  // Communication (si multi-GPU) — fraction du temps de compute
+  const commBatch = (gpusTrain>1) ? (timeComputeBatch * commPct * (gpusTrain-1)/gpusTrain) : 0;
+  const timePerBatch = timeComputeBatch + commBatch;
+
+  // Temps d'entraînement total (heures)
+  const trainHours = (steps * timePerBatch) / 3600;
+
+  return {
+    g, paramsB, modelGB, tmin, tmax, seqAvg, bs, samples, steps,
+    infTimeMin, infTimeMax, vramInfGB,
+    timeFwd, timeBwd, commBatch, timePerBatch,
+    trainHours, vramTrainGB,
+    gpusTrain, gpusInf
+  };
+}
+
+/* ======== MAJ UI ======== */
+function refresh(){
+  // UI champs
+  $("#overrideSpecs").checked = !!state.override;
+  $("#specsEditor").style.display = state.override ? "block" : "none";
+  if(state.override){
+    $("#iCores").value = state.cores;
+    $("#iVram").value = state.vramGB;
+    $("#iClkMin").value = state.clkMinGHz;
+    $("#iClkMax").value = state.clkMaxGHz;
+  }
+  updateGPUKpis();
+
+  const out = computeAll();
+
+  // Cartes inférence
+  $("#infMin").textContent = fmt(out.infTimeMin, 3);
+  $("#infMax").textContent = fmt(out.infTimeMax, 3);
+  $("#vramInf").textContent = fmt(out.vramInfGB, 2);
+
+  // Batch breakdown
+  $("#fwdBatch").textContent = fmt(out.timeFwd, 3);
+  $("#bwdBatch").textContent = fmt(out.timeBwd, 3);
+  $("#commBatch").textContent = fmt(out.commBatch, 3);
+  $("#timeBatch").textContent = fmt(out.timePerBatch, 3);
+  $("#trainHours").textContent = fmt(out.trainHours, 2);
+  $("#vramTrain").textContent = fmt(out.vramTrainGB, 2);
+
+  // Récap
+  $("#tTrainH").textContent = fmt(out.trainHours,2);
+  $("#tInfMin").textContent = fmt(out.infTimeMin,3);
+  $("#tInfMax").textContent = fmt(out.infTimeMax,3);
+  $("#tVramTrain").textContent = fmt(out.vramTrainGB,2);
+  $("#tVramModel").textContent = fmt(out.modelGB,2);
+  $("#tGpusTrain").textContent = out.gpusTrain;
+  $("#tGpusInf").textContent = out.gpusInf;
+
+  // Couleurs sémantiques #GPU
+  const gt = $("#tGpusTrain"), gi = $("#tGpusInf");
+  gt.className = out.gpusTrain===1 ? "ok" : (out.gpusTrain<=4?"warn":"danger");
+  gi.className = out.gpusInf===1 ? "ok" : (out.gpusInf<=4?"warn":"danger");
+}
+
+/* ======== Binding inputs ======== */
+function bindInputs(){
+  // Toggle override
+  $("#overrideSpecs").addEventListener("change", e=>{
+    state.override = e.target.checked;
+    if(!state.override){
+      const g = GPUs[state.gpuKey];
+      state.cores = g.cores; state.vramGB = g.vramGB; state.clkMinGHz=g.clkMinGHz; state.clkMaxGHz=g.clkMaxGHz;
+    }
+    saveState(); refresh();
+  });
+
+  // Specs fields
+  ["iCores","iVram","iClkMin","iClkMax"].forEach(id=>{
+    $( "#"+id ).addEventListener("input", e=>{
+      const v = Number(e.target.value);
+      if(id==="iCores") state.cores = Math.max(1, Math.round(v||0));
+      if(id==="iVram") state.vramGB = Math.max(1, v||0);
+      if(id==="iClkMin") state.clkMinGHz = Math.max(.5, v||0);
+      if(id==="iClkMax") state.clkMaxGHz = Math.max(state.clkMinGHz, v||0);
+      saveState(); refresh();
+    });
+  });
+
+  // Modèle & data
+  [
+    ["#mName","mName"],["#mParamsB","mParamsB"],["#mEff","mEff"],["#mVramGB","mVramGB"],
+    ["#tokMin","tokMin"],["#tokMax","tokMax"],["#precision","precision"],
+    ["#nSamples","nSamples"],["#batchSize","batchSize"],
+    ["#epochs","epochs"],["#actPct","actPct"],["#kvPct","kvPct"],["#commPct","commPct"],
+  ].forEach(([sel,key])=>{
+    $(sel).value = state[key] ?? "";
+    $(sel).addEventListener("input", e=>{
+      let v = e.target.value;
+      if(e.target.type==="number") v = Number(v);
+      state[key] = v;
+      saveState();
+      // léger debounce via rAF
+      cancelAnimationFrame(bindInputs._raf);
+      bindInputs._raf = requestAnimationFrame(refresh);
+    });
+  });
+
+  // Actions
+  $("#resetBtn").addEventListener("click", ()=>{
+    localStorage.removeItem(lsKey);
+    state = {
+      gpuKey: "h100",
+      override:false,
+      cores: GPUs.h100.cores, vramGB: GPUs.h100.vramGB, clkMinGHz: GPUs.h100.clkMinGHz, clkMaxGHz: GPUs.h100.clkMaxGHz,
+      mName:"", mParamsB: 7, mEff:1, mVramGB:null, tokMin:64, tokMax:2048,
+      precision:"bf16", nSamples:50000, batchSize:64, epochs:1, actPct:30, kvPct:25, commPct:10,
+    };
+    renderGPUChoices(); refresh();
+  });
+
+  $("#copyBtn").addEventListener("click", ()=>{
+    const snapshot = { ...state, currentGPU: currentGPU() };
+    navigator.clipboard.writeText(JSON.stringify(snapshot,null,2))
+      .then(()=> alert("État copié dans le presse-papiers ✅"))
+      .catch(()=> alert("Impossible de copier (permissions)"));
+  });
+}
+
+/* ======== Init ======== */
+loadState();
+renderGPUChoices();
+bindInputs();
+refresh();
+</script>
+</body>
+</html>
