@@ -89,7 +89,7 @@
     <span class="badge">Calculette GPU</span>
     <h1>Estimation Inference & Entraînement</h1>
   </div>
-  <p class="sub">Choisis un GPU, renseigne ton modèle, et obtiens des estimations réactives (compute, VRAM, temps & #GPU). Les formules sont ajustables dans la section “Avancé”.</p>
+  <p class="sub">Choisis un type de  GPU, renseigne ton modèle et estime ton besoin en GPU ! Les formules sont ajustables dans la section “Avancé”.</p>
 </header>
 
 <div class="container">
@@ -325,7 +325,7 @@
       <button class="secondary" id="resetBtn">Réinitialiser</button>
       <button id="copyBtn">Copier l’état</button>
     </div>
-    <p class="tiny">⚠️ Outil d’estimation. Pour du sizing contractuel, calibre les multiplicateurs / pourcentages selon ton stack (tensor cores, pipeline/DP/TP, activation checkpointing, NVLink, etc.).</p>
+    <p class="tiny">⚠️ Outil d’estimation. Pour du sizing approximatif. Les calculs sont purement théorique et sont une estimation large des besoins.</p>
   </section>
 </div>
 
@@ -499,8 +499,10 @@ function computeAll(){
   const vramInfGB = modelGB + kvGB;
 
   // #GPUs en fonction de la VRAM
-  const gpusTrain = Math.max(1, Math.ceil(vramTrainGB / g.vramGB));
-  const gpusInf = Math.max(1, Math.ceil(vramInfGB / g.vramGB));
+  const fgpusTrain =  vramTrainGB / g.vramGB;
+  const fgpusInf =  vramInfGB / g.vramGB ;
+  const gpusTrain =  fgpusTrain.toPrecision(2)
+  const gpusInf =  fgpusInf.toPrecision(2)
 
   // Communication (si multi-GPU) — fraction du temps de compute
   const commBatch = (gpusTrain>1) ? (timeComputeBatch * commPct * (gpusTrain-1)/gpusTrain) : 0;
